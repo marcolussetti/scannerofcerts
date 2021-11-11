@@ -1,12 +1,13 @@
-package scancertlib
+package furiousscanlib
 
 import (
 	"context"
 	"fmt"
 	furiousscan "github.com/liamg/furious/scan"
-	"os"
-	"time"
 	"inet.af/netaddr"
+	"os"
+	"sort"
+	"time"
 )
 
 // PortScanHost Struct type for port scan results, to avoid having to re-import furious elsewhere
@@ -56,11 +57,12 @@ func GetAliveHosts(hosts []PortScanHost) []PortScanHost {
 // ByIP implements sort.Interface based on the Host field
 type ByIP []PortScanHost
 
-func (a ByIP) Len() int { return len(a) }
+func (a ByIP) Len() int           { return len(a) }
 func (a ByIP) Less(i, j int) bool {	return a[i].Host.Less(a[j].Host) }
-func (a ByIP) Swap(i, j int)  { a[i], a[j] = a[j], a[i] }
+func (a ByIP) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortByIP Sorts PortScanHost by IP
-func SortByIP (hosts []PortScanHost) []PortScanHost {
+func SortByIP (hosts ByIP) []PortScanHost {
+	sort.Sort(hosts)
 	return hosts
 }

@@ -9,43 +9,37 @@ package main
 // validity, expiration date, and applicable hosts/ports combinations.
 
 import (
-	"context"
 	"fmt"
-	"github.com/liamg/furious/scan"
-	"os"
+	"goscancerts/internal/furiousscanlib"
 	"time"
 )
 
+var (
+	scanTimeout = time.Millisecond*time.Duration(2000)
+	scanParallelism = 1000
+)
+
 func main() {
-	// Check if not running as root
-	if os.Getuid() > 0 {
-		fmt.Println("This program must be run as root/privileged user.")
-		os.Exit(1)
-	}
+	// Check if not running as root, required for posts
+	//if os.Getuid() > 0 {
+	//	fmt.Println("This program must be run as root/privileged user.")
+	//	os.Exit(1)
+	//}
 
-	targetIterator := scan.NewTargetIterator("10.0.0.0/24")
-	scanner := scan.NewSynScanner(targetIterator, time.Millisecond*time.Duration(2000), 1000)
-	if err := scanner.Start(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	ctx, _ := context.WithCancel(context.Background())
-	results, err := scanner.Scan(ctx, scan.DefaultPorts)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	// Firstly, we shall scan the hosts given to determine which ports to further investigate
+	scanResults := furiousscanlib.PortScan("10.0.0.0/24", []int{80, 443}, scanTimeout, scanParallelism)
+	scanResults = furiousscanlib.GetAliveHosts(scanResults)
+	scanResults = furiousscanlib.SortByIP(scanResults)
 
-	hostsAlive := []scan.Result{}
-
-	for _, result := range results {
-		if len(result.Open) > 0 {
-			hostsAlive = append(hostsAlive, result)
+	for _, result := range scanResults {
+		fmt.Print(fmt.Sprintf("%s (%s). Open ports: ", result.Host, result.Name))
+		for i, port := range result.OpenPorts {
+			if i > 0 {
+				fmt.Print(", ")
+			}
+			fmt.Print(fmt.Sprintf("%d", port))
 		}
-	}
-
-	for _, result := range hostsAlive {
-		scanner.OutputResult(result)
+		fmt.Println()
 	}
 
 }
