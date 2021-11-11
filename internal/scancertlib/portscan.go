@@ -4,20 +4,21 @@ import (
 	"context"
 	"fmt"
 	furiousscan "github.com/liamg/furious/scan"
-	"net"
 	"os"
 	"time"
+	"inet.af/netaddr"
 )
 
 // PortScanHost Struct type for port scan results, to avoid having to re-import furious elsewhere
 type PortScanHost struct {
-	Host net.IP
+	Host netaddr.IP  // To avoid having to implement sorting, among other things
 	Name string
 	OpenPorts []int
 	ClosedPorts []int
 	FilteredPorts []int
 }
 
+// PortScan Wrapper for the furious library
 func PortScan(scanRange string, scanPorts []int, timeout time.Duration, parallelism int) []PortScanHost {
 	targetIterator := furiousscan.NewTargetIterator(scanRange)
 	scanner := furiousscan.NewSynScanner(targetIterator, time.Millisecond*time.Duration(2000), 1000)
@@ -34,12 +35,14 @@ func PortScan(scanRange string, scanPorts []int, timeout time.Duration, parallel
 
 	var hosts []PortScanHost
 	for _, result := range results {
-		hosts = append(hosts, PortScanHost{Host: result.Host, Name: result.Name, OpenPorts: result.Open, ClosedPorts: result.Closed, FilteredPorts: result.Filtered})
+		netaddrIP, _ := netaddr.FromStdIP(result.Host)
+		hosts = append(hosts, PortScanHost{Host: netaddrIP, Name: result.Name, OpenPorts: result.Open, ClosedPorts: result.Closed, FilteredPorts: result.Filtered})
 	}
 
 	return hosts
 }
 
+// GetAliveHosts Filters out hosts without open ports
 func GetAliveHosts(hosts []PortScanHost) []PortScanHost {
 	var filteredHosts []PortScanHost
 	for _, host := range hosts {
@@ -49,4 +52,15 @@ func GetAliveHosts(hosts []PortScanHost) []PortScanHost {
 	}
 
 	return filteredHosts
+}
+// ByIP implements sort.Interface based on the Host field
+type ByIP []PortScanHost
+
+func (a ByIP) Len() int { return len(a) }
+func (a ByIP) Less(i, j int) bool {	return a[i].Host.Less(a[j].Host) }
+func (a ByIP) Swap(i, j int)  { a[i], a[j] = a[j], a[i] }
+
+// SortByIP Sorts PortScanHost by IP
+func SortByIP (hosts []PortScanHost) []PortScanHost {
+	return hosts
 }
