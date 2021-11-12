@@ -1,4 +1,4 @@
-module goscancerts
+module scannerofcerts
 
 go 1.17
 

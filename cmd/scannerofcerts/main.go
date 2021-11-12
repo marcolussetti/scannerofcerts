@@ -1,6 +1,6 @@
 package main
 
-// goscancerts is a portable Go application that scans for, and reports on,
+// scannerofcerts is a portable Go application that scans for, and reports on,
 // certificates in a specified subnet.
 //
 // It scan each host in the subnet on a customizable range of ports, aiming to
@@ -10,7 +10,7 @@ package main
 
 import (
 	"fmt"
-	"goscancerts/internal/furiousscanlib"
+	"scannerofcerts/internal/furiousscanlib"
 	"time"
 )
 
@@ -32,7 +32,7 @@ func main() {
 	scanResults = furiousscanlib.SortByIP(scanResults)
 
 	for _, result := range scanResults {
-		fmt.Print(fmt.Sprintf("%s (%s). Open ports: ", result.Host, result.Name))
+		fmt.Print(fmt.Sprintf("%s (%s). Open ports: ", result.IP, result.Name))
 		for i, port := range result.OpenPorts {
 			if i > 0 {
 				fmt.Print(", ")

@@ -12,10 +12,10 @@ import (
 
 // PortScanHost Struct type for port scan results, to avoid having to re-import furious elsewhere
 type PortScanHost struct {
-	Host netaddr.IP  // To avoid having to implement sorting, among other things
-	Name string
-	OpenPorts []int
-	ClosedPorts []int
+	IP            netaddr.IP // To avoid having to implement sorting, among other things
+	Name          string
+	OpenPorts     []int
+	ClosedPorts   []int
 	FilteredPorts []int
 }
 
@@ -37,7 +37,7 @@ func PortScan(scanRange string, scanPorts []int, timeout time.Duration, parallel
 	var hosts []PortScanHost
 	for _, result := range results {
 		netaddrIP, _ := netaddr.FromStdIP(result.Host)
-		hosts = append(hosts, PortScanHost{Host: netaddrIP, Name: result.Name, OpenPorts: result.Open, ClosedPorts: result.Closed, FilteredPorts: result.Filtered})
+		hosts = append(hosts, PortScanHost{IP: netaddrIP, Name: result.Name, OpenPorts: result.Open, ClosedPorts: result.Closed, FilteredPorts: result.Filtered})
 	}
 
 	return hosts
@@ -54,11 +54,11 @@ func GetAliveHosts(hosts []PortScanHost) []PortScanHost {
 
 	return filteredHosts
 }
-// ByIP implements sort.Interface based on the Host field
+// ByIP implements sort.Interface based on the IP field
 type ByIP []PortScanHost
 
 func (a ByIP) Len() int           { return len(a) }
-func (a ByIP) Less(i, j int) bool {	return a[i].Host.Less(a[j].Host) }
+func (a ByIP) Less(i, j int) bool {	return a[i].IP.Less(a[j].IP) }
 func (a ByIP) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortByIP Sorts PortScanHost by IP
