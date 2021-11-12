@@ -10,25 +10,27 @@ import (
 	"time"
 )
 
+type Port int
+
 // PortScanHost Struct type for port scan results, to avoid having to re-import furious elsewhere
 type PortScanHost struct {
 	IP            netaddr.IP // To avoid having to implement sorting, among other things
 	Name          string
-	OpenPorts     []int
-	ClosedPorts   []int
-	FilteredPorts []int
+	OpenPorts     Ports
+	ClosedPorts   Ports
+	FilteredPorts Ports
 }
 
 // PortScan Wrapper for the furious library
 func PortScan(scanRange string, scanPorts []int, timeout time.Duration, parallelism int) []PortScanHost {
 	targetIterator := furiousscan.NewTargetIterator(scanRange)
-	scanner := furiousscan.NewSynScanner(targetIterator, time.Millisecond*time.Duration(2000), 1000)
+	scanner := furiousscan.NewSynScanner(targetIterator, timeout, parallelism)
 	if err := scanner.Start(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	ctx, _ := context.WithCancel(context.Background())
-	results, err := scanner.Scan(ctx, furiousscan.DefaultPorts)
+	results, err := scanner.Scan(ctx, scanPorts)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -37,7 +39,13 @@ func PortScan(scanRange string, scanPorts []int, timeout time.Duration, parallel
 	var hosts []PortScanHost
 	for _, result := range results {
 		netaddrIP, _ := netaddr.FromStdIP(result.Host)
-		hosts = append(hosts, PortScanHost{IP: netaddrIP, Name: result.Name, OpenPorts: result.Open, ClosedPorts: result.Closed, FilteredPorts: result.Filtered})
+		var openPorts Ports = result.Open
+		sort.Sort(openPorts)
+		var closedPorts Ports = result.Closed
+		sort.Sort(closedPorts)
+		var filteredPorts Ports = result.Filtered
+		sort.Sort(filteredPorts)
+		hosts = append(hosts, PortScanHost{IP: netaddrIP, Name: result.Name, OpenPorts: openPorts, ClosedPorts: closedPorts, FilteredPorts: filteredPorts})
 	}
 
 	return hosts
@@ -54,15 +62,22 @@ func GetAliveHosts(hosts []PortScanHost) []PortScanHost {
 
 	return filteredHosts
 }
+
 // ByIP implements sort.Interface based on the IP field
 type ByIP []PortScanHost
 
 func (a ByIP) Len() int           { return len(a) }
-func (a ByIP) Less(i, j int) bool {	return a[i].IP.Less(a[j].IP) }
+func (a ByIP) Less(i, j int) bool { return a[i].IP.Less(a[j].IP) }
 func (a ByIP) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortByIP Sorts PortScanHost by IP
-func SortByIP (hosts ByIP) []PortScanHost {
+func SortByIP(hosts ByIP) []PortScanHost {
 	sort.Sort(hosts)
 	return hosts
 }
+
+type Ports []int
+
+func (a Ports) Len() int           { return len(a) }
+func (a Ports) Less(i, j int) bool { return a[i] < a[j] }
+func (a Ports) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
