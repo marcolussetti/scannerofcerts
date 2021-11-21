@@ -7,9 +7,30 @@ the results.
 
 ## Installation
 
-`scannerofcerts` is a single binary distributed through the
-[_Release_](https://github.com/marcolussetti/scannerofcerts/releases) section here on GitHub. No installation is
-required and binaries are available for multiple platforms.
+`scannerofcerts` requires the libpcap library to be installed. Other than that, it is a single binary distributed through the
+[_Release_](https://github.com/marcolussetti/scannerofcerts/releases) section here on GitHub.
+
+### Linux
+Install libpcap (Ubuntu/Debian: `sudo apt install libpcap`, Arch: `sudo pacman -S libpcap`, RHEL/Fedora/OracleLinux/RockyLinux: `sudo yum install libpcap`, etc.)
+
+Download and run the latest `scannerofcerts` binary for amd64 from the releases section.
+
+### Windows
+
+Install npcap in WinPCap compatibility mode:
+- Download and run "Npcap 1.55 installer" (or later version) from https://nmap.org/npcap/
+- When asked if wished to retain WinPCap compatibility mode, please choose yes
+
+Download and run the latest `scannerofcerts` exe for amd64.
+
+### Mac
+
+Currently, the build pipeline is failing to dynamically link libpcap on Mac. Current process:
+- Install libpcap with your favourite package manager (`brew install libpcap`)
+- Install golang (see instructions and package at https://golang.org/doc/install)
+- Clone this repo (`git clone https://github.com/marcolussetti/scannerofcerts.git`)
+- Build this repo (`go build -o scannerofcerts ./cmd/scannerofcerts`)
+- Run the binary (`chmod +x scannerofcerts && ./scannerofcerts`)
 
 ## Usage
 
@@ -55,6 +76,8 @@ GLOBAL OPTIONS:
 - Formalized testing
 - Testing of build artifacts
 - Docker container (offer docker container with libpcap)
+- Mac support (on M1 & amd64)
+- Arm support (on Linux)
 
 ### Limitations
 
