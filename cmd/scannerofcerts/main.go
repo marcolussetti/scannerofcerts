@@ -203,12 +203,12 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:  "csv",
-				Usage: "path to output for CSV file (disable stdout)",
+				Usage: "path to output for CSV file, disables stdout",
 				//Required: true,
 			},
 			&cli.BoolFlag{
 				Name:  "stdout",
-				Usage: "prints output to stdout (implied if other output methods are not enabled)",
+				Usage: "prints output to stdout, implied if other output methods are not enabled",
 				//Required: true,
 			},
 			&cli.IntFlag{
