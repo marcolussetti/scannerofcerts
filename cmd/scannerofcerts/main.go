@@ -40,6 +40,7 @@ func scan(c *cli.Context) error {
 
 	// Second, extract flags
 	targetsHosts := c.String("targets")
+	targets := strings.Split(targetsHosts, ",")
 	targetPorts := c.String("ports")
 	var ports []int
 	for _, targetPort := range strings.Split(targetPorts, ",") {
@@ -69,7 +70,10 @@ func scan(c *cli.Context) error {
 
 	// Secondly, we shall scan the hosts given to determine which ports to further investigate
 	log.Debug("Begin furious-backed port scan")
-	scanResults := furiousscanlib.PortScan(targetsHosts, ports, scanTimeout, scanParallelism)
+	var scanResults []furiousscanlib.PortScanHost
+	for _, targetRange := range targets {
+		scanResults = append(scanResults, furiousscanlib.PortScan(targetRange, ports, scanTimeout, scanParallelism)...)
+	}
 	log.Debug("Completed furious-backed port scan")
 	scanResults = furiousscanlib.GetAliveHosts(scanResults)
 	scanResults = furiousscanlib.SortByIP(scanResults)
@@ -88,7 +92,6 @@ func scan(c *cli.Context) error {
 	// Thirdly, we shall attempt to connect to the ports and harvest SSL information
 	log.Debug("Begin attempting to SSL connect to ports")
 
-	// TODO: Remove test
 	var certResults []scancertlib.CertScanResult
 	for _, hostResult := range scanResults {
 		for _, port := range hostResult.OpenPorts {
@@ -96,13 +99,6 @@ func scan(c *cli.Context) error {
 			certResults = append(certResults, certResult)
 		}
 	}
-
-	//certResults = []scancertlib.CertScanResult{}
-	//for _, host := range []string{"tls-v1-2.badssl.com:1012", "tls-v1-1.badssl.com:1011", "tls-v1-0.badssl.com:1010"} {
-	//	port, _ := strconv.Atoi(strings.Split(host, ":")[1])
-	//	certResult := scancertlib.ScanCert(strings.Split(host, ":")[0], port)
-	//	certResults = append(certResults, certResult)
-	//}
 
 	log.Debug("Scan finished")
 
@@ -192,7 +188,7 @@ func main() {
 			&cli.StringFlag{
 				Name:     "targets",
 				Aliases:  []string{"t"},
-				Usage:    "host or list of host/ranges to be scanned. Multiple hosts may be separated by commas, ranges can be specified with dashes (e.g. 10.0.0.0-10.0.0.254)",
+				Usage:    "host or list of host/ranges to be scanned. Multiple hosts may be separated by commas, ranges can be specified with subnets (e.g. 10.10.10.0/24)",
 				Required: true,
 			},
 			&cli.StringFlag{
