@@ -9,22 +9,27 @@ package main
 // validity, expiration date, and applicable hosts/ports combinations.
 
 import (
+	"crypto/md5"
+	"encoding/csv"
+	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"scannerofcerts/internal/furiousscanlib"
 	"scannerofcerts/internal/scancertlib"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/urfave/cli/v2"
 )
 
 var (
 	logLevel = log.DebugLevel
-	scanTimeout = time.Millisecond*time.Duration(20000)
-	scanParallelism = 1000
-	scanPorts = []int{22, 23, 80, 443}
 )
 
-func main() {
+
+func scan(c *cli.Context) error {
 	// Firstly, we shall handle flags, initial setup, and so forth
 	log.SetLevel(logLevel)
 
@@ -34,9 +39,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Second, extract flags
+	targetsHosts := c.String("targets")
+	targetPorts := c.String("ports")
+	var ports []int
+	for _, targetPort := range strings.Split(targetPorts, ",") {
+		if strings.Contains(targetPort, ":") {
+			portRangeStr := strings.Split(targetPort, ":")
+			var portRangeInt []int
+			if len(portRangeStr) != 2 {
+				log.Error(errors.New("incorrect range in port range"))
+			} else {
+				portRangeInt[0], _ = strconv.Atoi(portRangeStr[0])
+				portRangeInt[1], _ = strconv.Atoi(portRangeStr[1])
+				for i := portRangeInt[0]; i <= portRangeInt[1]; i++ {
+					ports = append(ports, i)
+				}
+			}
+		} else {
+			portInt, err := strconv.Atoi(targetPort)
+			if err != nil {
+				log.Error(err)
+			} else {
+				ports = append(ports, portInt)
+			}
+		}
+	}
+	scanParallelism := c.Int("parallelism")
+	scanTimeout := time.Duration(c.Int("timeout")) * time.Millisecond
+
+
 	// Secondly, we shall scan the hosts given to determine which ports to further investigate
 	log.Debug("Begin furious-backed port scan")
-	scanResults := furiousscanlib.PortScan("10.0.0.0/24", scanPorts, scanTimeout, scanParallelism)
+	scanResults := furiousscanlib.PortScan(targetsHosts, ports, scanTimeout, scanParallelism)
 	log.Debug("Completed furious-backed port scan")
 	scanResults = furiousscanlib.GetAliveHosts(scanResults)
 	scanResults = furiousscanlib.SortByIP(scanResults)
@@ -58,8 +93,8 @@ func main() {
 	// TODO: Remove test
 	var certResults []scancertlib.CertScanResult
 	for _, hostResult := range scanResults {
-		for _, _ = range hostResult.OpenPorts {
-			certResult := scancertlib.ScanCert(hostResult.IP.String(), 443)
+		for _, port := range hostResult.OpenPorts {
+			certResult := scancertlib.ScanCert(hostResult.IP.String(), port)
 			certResults = append(certResults, certResult)
 		}
 	}
@@ -71,7 +106,101 @@ func main() {
 	//	certResults = append(certResults, certResult)
 	//}
 
-	print("Finished")
-	// Lastly, we shall export it
+	output := [][]string{
+		{"host", "port", "fingerprint", "valid_not_before", "valid_not_after", "subject", "issuer", "sans"},
+	}
+	for _, certResult := range certResults {
+		if len(certResult.Certs) == 0 {
+			output = append(output, []string{certResult.Host, fmt.Sprintf("%d", certResult.Port), ""})
+			continue
+		}
+		leafCert := certResult.Certs[0]
 
+		leafFingerprint := ""
+		for _, chunk := range md5.Sum(leafCert.Raw) {
+			leafFingerprint += fmt.Sprintf("%02X", chunk)
+		}
+
+		leafSAN := ""
+		for _, san := range leafCert.DNSNames {
+			leafSAN += fmt.Sprintf(",%s", san)
+		}
+		for _, san := range leafCert.IPAddresses {
+			leafSAN += fmt.Sprintf(",%s", san)
+		}
+		if len([]rune(leafSAN)) > 0 {
+			leafSAN = string([]rune(leafSAN)[1:len([]rune(leafSAN))])
+		}
+
+		output = append(output, []string{certResult.Host, fmt.Sprintf("%d", certResult.Port), leafFingerprint,
+			leafCert.NotBefore.Format("2006-01-02"), leafCert.NotAfter.Format("2006-01-02"),
+			fmt.Sprintf("CN=%s, OU=%s, O=%s", leafCert.Subject.CommonName, leafCert.Subject.OrganizationalUnit,
+				leafCert.Subject.Organization),
+			fmt.Sprintf("CN=%s, OU=%s, O=%s", leafCert.Issuer.CommonName, leafCert.Issuer.OrganizationalUnit,
+				leafCert.Issuer.Organization),
+			leafSAN,
+		})
+	}
+
+	csvWriter := csv.NewWriter(os.Stdout)
+
+	for _, entry := range output {
+		if err := csvWriter.Write(entry); err != nil {
+			log.Error("Could not write CSV - ", err)
+		}
+	}
+	csvWriter.Flush()
+	if err := csvWriter.Error(); err != nil {
+		log.Error(err)
+	}
+
+	log.Debug("Finished")
+	// Lastly, we shall export it
+	return nil
+
+}
+
+func main() {
+	app := &cli.App{
+		Name: "scannerofcerts",
+		Usage: "Scan and reports on certificate in a IP range or hostlist",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name: "targets",
+				Aliases: []string{"t"},
+				Usage: "host or list of host/ranges to be scanned. Multiple hosts may be separated by commas, ranges can be specified with dashes (e.g. 10.0.0.0-10.0.0.254)",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name: "ports",
+				Aliases: []string{"l"},
+				Usage: "list of comma-separated ports to scan. - can be used to indicate ranges",
+				Value: "21,22,25,110,119,143,389,433,443,465,563,585,636,853,981,989,990,992,993,994,995,1311,1443,1521,2083,2087,2096,2443,2484,3269,3443,4443,5061,5443,5986,6443,6679,6697,7002,7443,8443,8888,9443",
+			},
+			&cli.StringFlag{
+				Name: "csv",
+				Aliases: []string{"c"},
+				Usage: "path to output for CSV file",
+				//Required: true,
+			},
+			&cli.IntFlag{
+				Name: "timeout",
+				Usage: "timeout (in ms) for the port scan",
+				Value: 20000,
+			},
+			&cli.IntFlag{
+				Name: "parallelism",
+				Usage: "parallelism level for the port scan",
+				Value: 2000,
+			},
+
+
+		},
+		Action: scan,
+	}
+
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
