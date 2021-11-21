@@ -28,6 +28,46 @@ var (
 	logLevel = log.DebugLevel
 )
 
+func parsePortsArg(input string) ([]int, error) {
+	var ports []int
+	for _, targetPort := range strings.Split(input, ",") {
+		if strings.Contains(targetPort, ":") {
+			portRangeStr := strings.Split(targetPort, ":")
+			var portRangeInt []int
+			if len(portRangeStr) != 2 {
+				log.Error(errors.New("incorrect range in port range"))
+			} else {
+				portRangeItem, _ := strconv.Atoi(portRangeStr[0])
+				portRangeInt = append(portRangeInt, portRangeItem)
+				portRangeItem, _ = strconv.Atoi(portRangeStr[1])
+				portRangeInt = append(portRangeInt, portRangeItem)
+				for i := portRangeInt[0]; i <= portRangeInt[1]; i++ {
+					if i > 65535 || i < 0 {
+						log.Error(errors.New("port exceeds valid values for TCP ports"))
+					} else {
+						ports = append(ports, i)
+					}
+				}
+			}
+		} else {
+			portInt, err := strconv.Atoi(targetPort)
+			if err != nil {
+				log.Error(err)
+			} else if portInt > 65535 || portInt < 0 {
+				log.Error(errors.New("port exceeds valid values for TCP ports"))
+			} else {
+				ports = append(ports, portInt)
+			}
+		}
+	}
+
+	if len(ports) < 1 {
+		return ports, errors.New("no valid ports parsed")
+	}
+
+	return ports, nil
+}
+
 func scan(c *cli.Context) error {
 	// Firstly, we shall handle flags, initial setup, and so forth
 	log.SetLevel(logLevel)
@@ -42,30 +82,9 @@ func scan(c *cli.Context) error {
 	targetsHosts := c.String("targets")
 	targets := strings.Split(targetsHosts, ",")
 	targetPorts := c.String("ports")
-	var ports []int
-	for _, targetPort := range strings.Split(targetPorts, ",") {
-		if strings.Contains(targetPort, ":") {
-			portRangeStr := strings.Split(targetPort, ":")
-			var portRangeInt []int
-			if len(portRangeStr) != 2 {
-				log.Error(errors.New("incorrect range in port range"))
-			} else {
-				portRangeItem, _ := strconv.Atoi(portRangeStr[0])
-				portRangeInt = append(portRangeInt, portRangeItem)
-				portRangeItem, _ = strconv.Atoi(portRangeStr[1])
-				portRangeInt = append(portRangeInt, portRangeItem)
-				for i := portRangeInt[0]; i <= portRangeInt[1]; i++ {
-					ports = append(ports, i)
-				}
-			}
-		} else {
-			portInt, err := strconv.Atoi(targetPort)
-			if err != nil {
-				log.Error(err)
-			} else {
-				ports = append(ports, portInt)
-			}
-		}
+	ports, err := parsePortsArg(targetPorts)
+	if err != nil {
+		log.Fatalf("no valid ports parsed")
 	}
 	scanParallelism := c.Int("parallelism")
 	scanTimeout := time.Duration(c.Int("timeout")) * time.Millisecond
