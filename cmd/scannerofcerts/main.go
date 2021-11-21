@@ -28,7 +28,6 @@ var (
 	logLevel = log.DebugLevel
 )
 
-
 func scan(c *cli.Context) error {
 	// Firstly, we shall handle flags, initial setup, and so forth
 	log.SetLevel(logLevel)
@@ -68,7 +67,6 @@ func scan(c *cli.Context) error {
 	scanParallelism := c.Int("parallelism")
 	scanTimeout := time.Duration(c.Int("timeout")) * time.Millisecond
 
-
 	// Secondly, we shall scan the hosts given to determine which ports to further investigate
 	log.Debug("Begin furious-backed port scan")
 	scanResults := furiousscanlib.PortScan(targetsHosts, ports, scanTimeout, scanParallelism)
@@ -106,6 +104,10 @@ func scan(c *cli.Context) error {
 	//	certResults = append(certResults, certResult)
 	//}
 
+	log.Debug("Scan finished")
+
+	// Lastly, we shall export it
+	log.Debug("Export started")
 	output := [][]string{
 		{"host", "port", "fingerprint", "valid_not_before", "valid_not_after", "subject", "issuer", "sans"},
 	}
@@ -142,59 +144,83 @@ func scan(c *cli.Context) error {
 		})
 	}
 
-	csvWriter := csv.NewWriter(os.Stdout)
+	var csvOutputs []*os.File
+	var csvWriters []*csv.Writer
+	if len(c.String("csv")) > 0 {
+		csvOutput, err := os.Create(c.String("csv"))
+		if err != nil {
+			log.Fatal("Failed to create target file - ", err)
+		}
+		csvOutputs = append(csvOutputs, csvOutput)
+	}
+	if len(c.String("csv")) == 0 || c.Bool("stdout") {
+		csvOutputs = append(csvOutputs, os.Stdout)
+	}
+	for _, csvOutput := range csvOutputs {
+		csvWriters = append(csvWriters, csv.NewWriter(csvOutput))
+	}
 
 	for _, entry := range output {
-		if err := csvWriter.Write(entry); err != nil {
-			log.Error("Could not write CSV - ", err)
+		for _, csvWriter := range csvWriters {
+			if err := csvWriter.Write(entry); err != nil {
+				log.Error("Could not write CSV - ", err)
+			}
 		}
 	}
-	csvWriter.Flush()
-	if err := csvWriter.Error(); err != nil {
-		log.Error(err)
+
+	for _, csvWriter := range csvWriters {
+		csvWriter.Flush()
+		if err := csvWriter.Error(); err != nil {
+			log.Error(err)
+		}
+	}
+	for _, csvOutput := range csvOutputs {
+		csvOutput.Close()
 	}
 
-	log.Debug("Finished")
-	// Lastly, we shall export it
+	log.Debug("Export completed")
+
 	return nil
 
 }
 
 func main() {
 	app := &cli.App{
-		Name: "scannerofcerts",
+		Name:  "scannerofcerts",
 		Usage: "Scan and reports on certificate in a IP range or hostlist",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name: "targets",
-				Aliases: []string{"t"},
-				Usage: "host or list of host/ranges to be scanned. Multiple hosts may be separated by commas, ranges can be specified with dashes (e.g. 10.0.0.0-10.0.0.254)",
+				Name:     "targets",
+				Aliases:  []string{"t"},
+				Usage:    "host or list of host/ranges to be scanned. Multiple hosts may be separated by commas, ranges can be specified with dashes (e.g. 10.0.0.0-10.0.0.254)",
 				Required: true,
 			},
 			&cli.StringFlag{
-				Name: "ports",
+				Name:    "ports",
 				Aliases: []string{"l"},
-				Usage: "list of comma-separated ports to scan. - can be used to indicate ranges",
-				Value: "21,22,25,110,119,143,389,433,443,465,563,585,636,853,981,989,990,992,993,994,995,1311,1443,1521,2083,2087,2096,2443,2484,3269,3443,4443,5061,5443,5986,6443,6679,6697,7002,7443,8443,8888,9443",
+				Usage:   "list of comma-separated ports to scan. - can be used to indicate ranges",
+				Value:   "21,22,25,110,119,143,389,433,443,465,563,585,636,853,981,989,990,992,993,994,995,1311,1443,1521,2083,2087,2096,2443,2484,3269,3443,4443,5061,5443,5986,6443,6679,6697,7002,7443,8443,8888,9443",
 			},
 			&cli.StringFlag{
-				Name: "csv",
-				Aliases: []string{"c"},
-				Usage: "path to output for CSV file",
+				Name:  "csv",
+				Usage: "path to output for CSV file (disable stdout)",
+				//Required: true,
+			},
+			&cli.BoolFlag{
+				Name:  "stdout",
+				Usage: "prints output to stdout (implied if other output methods are not enabled)",
 				//Required: true,
 			},
 			&cli.IntFlag{
-				Name: "timeout",
+				Name:  "timeout",
 				Usage: "timeout (in ms) for the port scan",
 				Value: 20000,
 			},
 			&cli.IntFlag{
-				Name: "parallelism",
+				Name:  "parallelism",
 				Usage: "parallelism level for the port scan",
 				Value: 2000,
 			},
-
-
 		},
 		Action: scan,
 	}
