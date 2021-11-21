@@ -50,8 +50,10 @@ func scan(c *cli.Context) error {
 			if len(portRangeStr) != 2 {
 				log.Error(errors.New("incorrect range in port range"))
 			} else {
-				portRangeInt[0], _ = strconv.Atoi(portRangeStr[0])
-				portRangeInt[1], _ = strconv.Atoi(portRangeStr[1])
+				portRangeItem, _ := strconv.Atoi(portRangeStr[0])
+				portRangeInt = append(portRangeInt, portRangeItem)
+				portRangeItem, _ = strconv.Atoi(portRangeStr[1])
+				portRangeInt = append(portRangeInt, portRangeItem)
 				for i := portRangeInt[0]; i <= portRangeInt[1]; i++ {
 					ports = append(ports, i)
 				}
@@ -193,8 +195,8 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "ports",
-				Aliases: []string{"l"},
-				Usage:   "list of comma-separated ports to scan. - can be used to indicate ranges",
+				Aliases: []string{"p"},
+				Usage:   "list of comma-separated ports to scan. : can be used to indicate ranges",
 				Value:   "21,22,25,110,119,143,389,433,443,465,563,585,636,853,981,989,990,992,993,994,995,1311,1443,1521,2083,2087,2096,2443,2484,3269,3443,4443,5061,5443,5986,6443,6679,6697,7002,7443,8443,8888,9443",
 			},
 			&cli.StringFlag{

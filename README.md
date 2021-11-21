@@ -47,7 +47,7 @@ COMMANDS:
 GLOBAL OPTIONS:
    --targets value, -t value  host or list of host/ranges to be scanned. Multiple hosts may be separated by commas,
                               ranges can be specified with subnets (e.g. 10.10.10.0/24)
-   --ports value, -l value    list of comma-separated ports to scan. - can be used to indicate ranges
+   --ports value, -p value    list of comma-separated ports to scan. - can be used to indicate ranges
                               (default: "21,22,25,110,119,143,389,433,443,465,563,585,636,853,981,989,990,992,993,994,
                                          995,1311,1443,1521,2083,2087,2096,2443,2484,3269,3443,4443,5061,5443,5986,
                                          6443,6679,6697,7002,7443,8443,8888,9443")
