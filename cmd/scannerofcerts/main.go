@@ -9,11 +9,13 @@ package main
 // validity, expiration date, and applicable hosts/ports combinations.
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/csv"
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"net"
 	"os"
 	"scannerofcerts/internal/furiousscanlib"
 	"scannerofcerts/internal/scancertlib"
@@ -66,6 +68,26 @@ func parsePortsArg(input string) ([]int, error) {
 	}
 
 	return ports, nil
+}
+
+func ptrLookup(ip string) string {
+	netResolverCtx, cancel := context.WithTimeout(context.TODO(), 500*time.Millisecond)
+	defer cancel()
+	var netResolver net.Resolver
+
+	dnsNames, _ := netResolver.LookupAddr(netResolverCtx, ip)
+	dnsName := ""
+	if len(dnsNames) > 0 {
+		dnsName = dnsNames[0]
+	}
+
+	// Golang rather punctiliously insists on supplying FQDNs which have, as is certainly correct, a terminating dot.
+	// It is however unclear whether anyone else cares.
+	if strings.HasSuffix(dnsName, ".") {
+		dnsName = strings.TrimRight(dnsName, ".")
+	}
+
+	return dnsName
 }
 
 func scan(c *cli.Context) error {
@@ -125,12 +147,17 @@ func scan(c *cli.Context) error {
 
 	// Lastly, we shall export it
 	log.Debug("Export started")
+	// It is often found convenient to have a DNS name associated with an IP, but a timeout is desirable on resolution
+
 	output := [][]string{
-		{"host", "port", "fingerprint", "valid_not_before", "valid_not_after", "subject", "issuer", "sans"},
+		{"host", "dns_name", "port", "fingerprint", "valid_not_before", "valid_not_after", "subject", "issuer", "sans"},
 	}
 	for _, certResult := range certResults {
+		dnsName := ptrLookup(certResult.Host)
+
+		// If no certificates are found, we shall simply append the host on its own
 		if len(certResult.Certs) == 0 {
-			output = append(output, []string{certResult.Host, fmt.Sprintf("%d", certResult.Port), ""})
+			output = append(output, []string{certResult.Host, dnsName, fmt.Sprintf("%d", certResult.Port), ""})
 			continue
 		}
 		leafCert := certResult.Certs[0]
@@ -151,7 +178,7 @@ func scan(c *cli.Context) error {
 			leafSAN = string([]rune(leafSAN)[1:len([]rune(leafSAN))])
 		}
 
-		output = append(output, []string{certResult.Host, fmt.Sprintf("%d", certResult.Port), leafFingerprint,
+		output = append(output, []string{certResult.Host, dnsName, fmt.Sprintf("%d", certResult.Port), leafFingerprint,
 			leafCert.NotBefore.Format("2006-01-02"), leafCert.NotAfter.Format("2006-01-02"),
 			fmt.Sprintf("CN=%s, OU=%s, O=%s", leafCert.Subject.CommonName, leafCert.Subject.OrganizationalUnit,
 				leafCert.Subject.Organization),
