@@ -9,11 +9,13 @@ package main
 // validity, expiration date, and applicable hosts/ports combinations.
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/csv"
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"net"
 	"os"
 	"scannerofcerts/internal/furiousscanlib"
 	"scannerofcerts/internal/scancertlib"
@@ -27,6 +29,66 @@ import (
 var (
 	logLevel = log.DebugLevel
 )
+
+func parsePortsArg(input string) ([]int, error) {
+	var ports []int
+	for _, targetPort := range strings.Split(input, ",") {
+		if strings.Contains(targetPort, ":") {
+			portRangeStr := strings.Split(targetPort, ":")
+			var portRangeInt []int
+			if len(portRangeStr) != 2 {
+				log.Error(errors.New("incorrect range in port range"))
+			} else {
+				portRangeItem, _ := strconv.Atoi(portRangeStr[0])
+				portRangeInt = append(portRangeInt, portRangeItem)
+				portRangeItem, _ = strconv.Atoi(portRangeStr[1])
+				portRangeInt = append(portRangeInt, portRangeItem)
+				for i := portRangeInt[0]; i <= portRangeInt[1]; i++ {
+					if i > 65535 || i < 0 {
+						log.Error(errors.New("port exceeds valid values for TCP ports"))
+					} else {
+						ports = append(ports, i)
+					}
+				}
+			}
+		} else {
+			portInt, err := strconv.Atoi(targetPort)
+			if err != nil {
+				log.Error(err)
+			} else if portInt > 65535 || portInt < 0 {
+				log.Error(errors.New("port exceeds valid values for TCP ports"))
+			} else {
+				ports = append(ports, portInt)
+			}
+		}
+	}
+
+	if len(ports) < 1 {
+		return ports, errors.New("no valid ports parsed")
+	}
+
+	return ports, nil
+}
+
+func ptrLookup(ip string) string {
+	netResolverCtx, cancel := context.WithTimeout(context.TODO(), 500*time.Millisecond)
+	defer cancel()
+	var netResolver net.Resolver
+
+	dnsNames, _ := netResolver.LookupAddr(netResolverCtx, ip)
+	dnsName := ""
+	if len(dnsNames) > 0 {
+		dnsName = dnsNames[0]
+	}
+
+	// Golang rather punctiliously insists on supplying FQDNs which have, as is certainly correct, a terminating dot.
+	// It is however unclear whether anyone else cares.
+	if strings.HasSuffix(dnsName, ".") {
+		dnsName = strings.TrimRight(dnsName, ".")
+	}
+
+	return dnsName
+}
 
 func scan(c *cli.Context) error {
 	// Firstly, we shall handle flags, initial setup, and so forth
@@ -42,30 +104,9 @@ func scan(c *cli.Context) error {
 	targetsHosts := c.String("targets")
 	targets := strings.Split(targetsHosts, ",")
 	targetPorts := c.String("ports")
-	var ports []int
-	for _, targetPort := range strings.Split(targetPorts, ",") {
-		if strings.Contains(targetPort, ":") {
-			portRangeStr := strings.Split(targetPort, ":")
-			var portRangeInt []int
-			if len(portRangeStr) != 2 {
-				log.Error(errors.New("incorrect range in port range"))
-			} else {
-				portRangeItem, _ := strconv.Atoi(portRangeStr[0])
-				portRangeInt = append(portRangeInt, portRangeItem)
-				portRangeItem, _ = strconv.Atoi(portRangeStr[1])
-				portRangeInt = append(portRangeInt, portRangeItem)
-				for i := portRangeInt[0]; i <= portRangeInt[1]; i++ {
-					ports = append(ports, i)
-				}
-			}
-		} else {
-			portInt, err := strconv.Atoi(targetPort)
-			if err != nil {
-				log.Error(err)
-			} else {
-				ports = append(ports, portInt)
-			}
-		}
+	ports, err := parsePortsArg(targetPorts)
+	if err != nil {
+		log.Fatalf("no valid ports parsed")
 	}
 	scanParallelism := c.Int("parallelism")
 	scanTimeout := time.Duration(c.Int("timeout")) * time.Millisecond
@@ -106,12 +147,17 @@ func scan(c *cli.Context) error {
 
 	// Lastly, we shall export it
 	log.Debug("Export started")
+	// It is often found convenient to have a DNS name associated with an IP, but a timeout is desirable on resolution
+
 	output := [][]string{
-		{"host", "port", "fingerprint", "valid_not_before", "valid_not_after", "subject", "issuer", "sans"},
+		{"host", "dns_name", "port", "fingerprint", "valid_not_before", "valid_not_after", "subject", "issuer", "sans"},
 	}
 	for _, certResult := range certResults {
+		dnsName := ptrLookup(certResult.Host)
+
+		// If no certificates are found, we shall simply append the host on its own
 		if len(certResult.Certs) == 0 {
-			output = append(output, []string{certResult.Host, fmt.Sprintf("%d", certResult.Port), ""})
+			output = append(output, []string{certResult.Host, dnsName, fmt.Sprintf("%d", certResult.Port), ""})
 			continue
 		}
 		leafCert := certResult.Certs[0]
@@ -132,7 +178,7 @@ func scan(c *cli.Context) error {
 			leafSAN = string([]rune(leafSAN)[1:len([]rune(leafSAN))])
 		}
 
-		output = append(output, []string{certResult.Host, fmt.Sprintf("%d", certResult.Port), leafFingerprint,
+		output = append(output, []string{certResult.Host, dnsName, fmt.Sprintf("%d", certResult.Port), leafFingerprint,
 			leafCert.NotBefore.Format("2006-01-02"), leafCert.NotAfter.Format("2006-01-02"),
 			fmt.Sprintf("CN=%s, OU=%s, O=%s", leafCert.Subject.CommonName, leafCert.Subject.OrganizationalUnit,
 				leafCert.Subject.Organization),
