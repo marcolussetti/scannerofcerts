@@ -1,4 +1,4 @@
-name: golangci-lint
+name: lint
 on:
   push:
     tags:
@@ -12,18 +12,14 @@ permissions:
   # Optional: allow read access to pull request. Use with `only-new-issues` option.
   # pull-requests: read
 jobs:
-  golangci:
-    name: lint
+  ci:
+    name: "Lint"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v2
+      - uses: WillAbides/setup-go-faster@v1.7.0
         with:
-          go-version: '^1.17.1'
-      - name: Install lint dependencies
-        run: |
-          go version
-          go get -u golang/x/lint/golint
+          go-version: '1.17.x'
       - name: Install libpcap
         run: |
           sudo apt-get update && \
@@ -32,7 +28,9 @@ jobs:
         run: go test -v -coverprofile=coverage.txt -covermode=atomic ./...
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1
-      - name: Run go vet, go lint
-        run: |
-          go vet .
-          golint -set_exit_status=1 .
+      - name: Run vet
+        run: go vet ./...
+      - uses: dominikh/staticcheck-action@v1.1.0
+        with:
+          version: "2021.1.1"
+          install-go: false
