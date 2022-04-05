@@ -1,6 +1,6 @@
-[![Coverage](https://codecov.io/gh/marcolussetti/scannerofcerts/branch/add-tests/graphs/badge.svg?branch=add-tests)](https://codecov.io/gh/marcolussetti/scannerofcerts)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://tldrlegal.com/license/apache-license-2.0-(apache-2.0))
-[![golangci-lint](https://github.com/marcolussetti/scannerofcerts/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/marcolussetti/scannerofcerts/actions/workflows/golangci-lint.yml)
+[![Coverage](https://codecov.io/gh/marcolussetti/scannerofcerts/branch/add-tests/graphs/badge.svg?branch=add-tests)](https://codecov.io/gh/marcolussetti/scannerofcerts)
+[![lint](https://github.com/marcolussetti/scannerofcerts/actions/workflows/lint.yml/badge.svg)](https://github.com/marcolussetti/scannerofcerts/actions/workflows/lint.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/marcolussetti/scannerofcerts)](https://goreportcard.com/report/github.com/marcolussetti/scannerofcerts)
 -----
 # scannerofcerts
